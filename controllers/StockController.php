@@ -64,8 +64,8 @@ class StockController extends BaseController
 		}
 		else
 		{
-			// Default 6 months
-			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-6 months')";
+			// Default 1 month
+			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-1 months')";
 		}
 
 		if (isset($request->getQueryParams()['product']) && filter_var($request->getQueryParams()['product'], FILTER_VALIDATE_INT) !== false)

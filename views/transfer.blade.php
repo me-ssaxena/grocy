@@ -61,6 +61,14 @@
 			</div>
 
 			<div class="form-group">
+				<label for="note">{{ $__t('Note') }}</label>
+				<textarea class="form-control"
+					rows="2"
+					id="note"
+					name="note"></textarea>
+			</div>
+
+			<div class="form-group">
 				<div class="custom-control custom-checkbox">
 					<input class="form-check-input custom-control-input"
 						type="checkbox"

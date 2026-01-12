@@ -1262,7 +1262,7 @@ class StockService extends BaseService
 		return $result;
 	}
 
-	public function TransferProduct(int $productId, float $amount, int $locationIdFrom, int $locationIdTo, $specificStockEntryId = 'default', &$transactionId = null)
+	public function TransferProduct(int $productId, float $amount, int $locationIdFrom, int $locationIdTo, $specificStockEntryId = 'default', &$transactionId = null, $note = null)
 	{
 		if (!$this->ProductExists($productId))
 		{
@@ -1383,7 +1383,7 @@ class StockService extends BaseService
 					'correlation_id' => $correlationId,
 					'transaction_Id' => $transactionId,
 					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
+					'note' => $note ?? $stockEntry->note
 				]);
 				$logRowForLocationFrom->save();
 
@@ -1401,7 +1401,7 @@ class StockService extends BaseService
 					'correlation_id' => $correlationId,
 					'transaction_Id' => $transactionId,
 					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
+					'note' => $note ?? $stockEntry->note
 				]);
 				$logRowForLocationTo->save();
 
@@ -1431,7 +1431,7 @@ class StockService extends BaseService
 					'correlation_id' => $correlationId,
 					'transaction_Id' => $transactionId,
 					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
+					'note' => $note ?? $stockEntry->note
 				]);
 				$logRowForLocationFrom->save();
 
@@ -1449,7 +1449,7 @@ class StockService extends BaseService
 					'correlation_id' => $correlationId,
 					'transaction_Id' => $transactionId,
 					'user_id' => GROCY_USER_ID,
-					'note' => $stockEntry->note
+					'note' => $note ?? $stockEntry->note
 				]);
 				$logRowForLocationTo->save();
 
@@ -1470,7 +1470,7 @@ class StockService extends BaseService
 					'shopping_location_id' => $stockEntry->shopping_location_id,
 					'open' => $stockEntry->open,
 					'opened_date' => $stockEntry->opened_date,
-					'note' => $stockEntry->note
+					'note' => $note ?? $stockEntry->note
 				]);
 				$stockEntryNew->save();
 

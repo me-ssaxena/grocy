@@ -21,6 +21,7 @@
 	jsonData.amount = jsonForm.amount;
 	jsonData.location_id_to = $("#location_id_to").val();
 	jsonData.location_id_from = $("#location_id_from").val();
+	jsonData.note = $("#note").val();
 
 	if ($("#use_specific_stock_entry").is(":checked"))
 	{
@@ -113,6 +114,7 @@
 						Grocy.Components.ProductPicker.Clear();
 						$("#location_id_to").val("");
 						$("#location_id_from").val("");
+						$("#note").val("");
 						Grocy.Components.ProductPicker.GetInputElement().focus();
 						Grocy.Components.ProductCard.Refresh(jsonForm.product_id);
 						Grocy.FrontendHelpers.ValidateForm('transfer-form');

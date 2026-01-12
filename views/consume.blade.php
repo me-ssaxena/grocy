@@ -135,6 +135,14 @@
 			))
 			@endif
 
+			<div class="form-group">
+				<label for="note">{{ $__t('Note') }}</label>
+				<textarea class="form-control"
+					rows="2"
+					id="note"
+					name="note"></textarea>
+			</div>
+
 			<button id="save-consume-button"
 				class="btn btn-success">{{ $__t('OK') }}</button>
 

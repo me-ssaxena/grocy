@@ -1,4 +1,4 @@
-﻿$('#save-consume-button').on('click', function(e)
+$('#save-consume-button').on('click', function(e)
 {
 	e.preventDefault();
 
@@ -22,6 +22,7 @@
 	jsonData.exact_amount = $('#consume-exact-amount').is(':checked');
 	jsonData.spoiled = $('#spoiled').is(':checked');
 	jsonData.allow_subproduct_substitution = true;
+	jsonData.note = jsonForm.note;
 
 	if ($("#use_specific_stock_entry").is(":checked"))
 	{
@@ -120,6 +121,7 @@
 						{
 							Grocy.Components.RecipePicker.Clear();
 						}
+						$('#note').val('');
 						if (Grocy.FeatureFlags.GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
 						{
 							$("#location_id").find("option").remove().end().append("<option></option>");

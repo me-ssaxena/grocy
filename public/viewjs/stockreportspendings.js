@@ -72,6 +72,9 @@ var metricsChart = new Chart("metrics-chart", {
 
 
 var metricsTable = $("#metrics-table").DataTable({
+	'paginate': true,
+	'pageLength': 100,
+	'dom': '<"row"<"col-sm-12 col-md-6 offset-md-6"f>><"row"<"col-sm-12"tr>><"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"p>>',
 	"columnDefs": [
 		{ "type": "num", "targets": 1 }
 	].concat($.fn.dataTable.defaults.columnDefs)

@@ -1,7 +1,10 @@
-﻿
+
 
 var stockOverviewTable = $('#stock-overview-table').DataTable({
+	'paginate': true,
 	'order': [[5, 'asc']],
+	'pageLength': 100,
+	'dom': '<"row"<"col-sm-12 col-md-6 offset-md-6"f>><"row"<"col-sm-12"tr>><"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"p>>',
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
 		{ 'searchable': false, "targets": 0 },
@@ -129,37 +132,57 @@ $(document).on('click', '.product-consume-button', function(e)
 {
 	e.preventDefault();
 
-	Grocy.FrontendHelpers.BeginUiBusy();
+	var element = $(e.currentTarget);
+	var productId = element.attr('data-product-id');
+	var consumeAmount = Number.parseFloat(element.attr('data-consume-amount'));
+	var originalTotalStockAmount = Number.parseFloat(element.attr('data-original-total-stock-amount'));
+	var wasSpoiled = element.hasClass("product-consume-button-spoiled");
+	var promptTitle = element.attr('title');
 
-	var productId = $(e.currentTarget).attr('data-product-id');
-	var consumeAmount = Number.parseFloat($(e.currentTarget).attr('data-consume-amount'));
-	var originalTotalStockAmount = Number.parseFloat($(e.currentTarget).attr('data-original-total-stock-amount'));
-	var wasSpoiled = $(e.currentTarget).hasClass("product-consume-button-spoiled");
-
-	Grocy.Api.Post('stock/products/' + productId + '/consume', { 'amount': consumeAmount, 'spoiled': wasSpoiled, 'allow_subproduct_substitution': true },
-		function(bookingResponse)
+	bootbox.prompt({
+		title: promptTitle + '<br><span class="text-muted small">' + __t('Note') + '</span>',
+		inputType: 'textarea',
+		required: false,
+		callback: function(result)
 		{
-			Grocy.Api.Get('stock/products/' + productId,
-				function(result)
+			if (result === null)
+			{
+				return;
+			}
+
+			Grocy.FrontendHelpers.BeginUiBusy();
+
+			Grocy.Api.Post('stock/products/' + productId + '/consume', { 'amount': consumeAmount, 'spoiled': wasSpoiled, 'allow_subproduct_substitution': true, 'note': result },
+				function(bookingResponse)
 				{
-					if (result.product.enable_tare_weight_handling == 1)
-					{
-						var toastMessage = __t('Removed %1$s of %2$s from stock', originalTotalStockAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
-					}
-					else
-					{
-						var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
-					}
+					Grocy.Api.Get('stock/products/' + productId,
+						function(result)
+						{
+							if (result.product.enable_tare_weight_handling == 1)
+							{
+								var toastMessage = __t('Removed %1$s of %2$s from stock', originalTotalStockAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+							}
+							else
+							{
+								var toastMessage = __t('Removed %1$s of %2$s from stock', consumeAmount.toLocaleString({ minimumFractionDigits: 0, maximumFractionDigits: Grocy.UserSettings.stock_decimal_places_amounts }) + " " + __n(consumeAmount, result.quantity_unit_stock.name, result.quantity_unit_stock.name_plural, true), result.product.name) + '<br><a class="btn btn-secondary btn-sm mt-2" href="#" onclick="UndoStockTransaction(\'' + bookingResponse[0].transaction_id + '\')"><i class="fa-solid fa-undo"></i> ' + __t("Undo") + '</a>';
+							}
 
-					if (wasSpoiled)
-					{
-						toastMessage += " (" + __t("Spoiled") + ")";
-					}
+							if (wasSpoiled)
+							{
+								toastMessage += " (" + __t("Spoiled") + ")";
+							}
 
-					Grocy.FrontendHelpers.EndUiBusy();
-					toastr.success(toastMessage);
-					RefreshStatistics();
-					RefreshProductRow(productId);
+							Grocy.FrontendHelpers.EndUiBusy();
+							toastr.success(toastMessage);
+							RefreshStatistics();
+							RefreshProductRow(productId);
+						},
+						function(xhr)
+						{
+							Grocy.FrontendHelpers.EndUiBusy();
+							console.error(xhr);
+						}
+					);
 				},
 				function(xhr)
 				{
@@ -167,13 +190,8 @@ $(document).on('click', '.product-consume-button', function(e)
 					console.error(xhr);
 				}
 			);
-		},
-		function(xhr)
-		{
-			Grocy.FrontendHelpers.EndUiBusy();
-			console.error(xhr);
 		}
-	);
+	});
 });
 
 $(document).on('click', '.product-open-button', function(e)

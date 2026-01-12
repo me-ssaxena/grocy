@@ -1,5 +1,8 @@
 ﻿var stockJournalTable = $('#stock-journal-table').DataTable({
 	'order': [[3, 'desc']],
+	'paginate': true,
+	'pageLength': 100,
+	'dom': '<"row"<"col-sm-12 col-md-6 offset-md-6"f>><"row"<"col-sm-12"tr>><"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"p>>',
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
 		{ 'searchable': false, "targets": 0 }

@@ -41,7 +41,7 @@ Setting('MEAL_PLAN_FIRST_DAY_OF_WEEK', '');
 // this here is used to format all money values,
 // so doesn't really matter, but needs to be the
 // ISO 4217 code of the currency ("USD", "EUR", "GBP", etc.)
-Setting('CURRENCY', 'USD');
+Setting('CURRENCY', 'INR');
 
 // Your preferred unit for energy
 // E.g. "kcal" or "kJ" or something else (doesn't really matter, it's only used to display energy values)
@@ -185,7 +185,7 @@ DefaultUserSetting('stock_decimal_places_amounts', 4); // Default decimal places
 DefaultUserSetting('stock_decimal_places_prices_input', 2); // Default decimal places allowed for prices (input)
 DefaultUserSetting('stock_decimal_places_prices_display', 2); // Default decimal places allowed for prices (display)
 DefaultUserSetting('stock_auto_decimal_separator_prices', false);  // If the decimal separator should be set automatically for amount inputs
-DefaultUserSetting('stock_due_soon_days', 5); // The "expiring soon" days
+DefaultUserSetting('stock_due_soon_days', 15); // The "expiring soon" days
 DefaultUserSetting('stock_default_purchase_amount', 0); // The default amount prefilled on the purchase page
 DefaultUserSetting('stock_default_consume_amount', 1); // The default amount prefilled on the consume page
 DefaultUserSetting('stock_default_consume_amount_use_quick_consume_amount', false); // If the products quick consume amount should be prefilled on the consume page

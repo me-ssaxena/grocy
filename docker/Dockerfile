@@ -1,4 +1,16 @@
-FROM php:8.2-fpm
+FROM php:8.2-apache
+
+# Enable Apache mod_rewrite
+RUN a2enmod rewrite
+
+# Update Apache DocumentRoot to point to Grocy's public folder
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# Fix HTTPS detection behind reverse proxy
+RUN echo "SetEnvIf X-Forwarded-Proto https HTTPS=on" >> /etc/apache2/conf-available/reverse-proxy.conf \
+    && a2enconf reverse-proxy
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \

@@ -18,4 +18,8 @@ if [ ! -d /var/www/html/data/viewcache ]; then
 fi
 
 # Start PHP-FPM
+if [ ! -z "$PHP_MEMORY_LIMIT" ]; then
+    echo "memory_limit = ${PHP_MEMORY_LIMIT}" > /usr/local/etc/php/conf.d/memory-limit.ini
+fi
+
 php-fpm

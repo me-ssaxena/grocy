@@ -7,6 +7,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: grocy-app
     volumes:
+      - grocy-code:/var/www/html
       - /container-data/sinali-grocy:/var/www/html/data
     restart: unless-stopped
 
@@ -15,6 +16,11 @@ services:
       context: .
       dockerfile: docker/nginx.Dockerfile
     container_name: grocy-web
+    volumes:
+      - grocy-code:/var/www/html
     depends_on:
       - app
     restart: unless-stopped
+
+volumes:
+  grocy-code:

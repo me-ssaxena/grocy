@@ -43,5 +43,11 @@ RUN composer install --no-dev --optimize-autoloader
 # Copy application code
 COPY . .
 
+# Copy entrypoint script
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 # Ensure proper permissions for data directory
 RUN chown -R www-data:www-data /var/www/html
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

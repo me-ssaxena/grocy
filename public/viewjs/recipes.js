@@ -10,14 +10,124 @@
 	select: {
 		style: 'single',
 		selector: 'tr td:not(:first-child)'
-	},
-	'initComplete': function()
-	{
-		this.api().row({ order: 'current' }, 0).select();
 	}
 });
 $('#recipes-table tbody').removeClass("d-none");
 recipesTables.columns.adjust().draw();
+
+function HighlightSelectedRecipe(recipeId)
+{
+	$("#recipes-table tr").removeClass("selected");
+	$(".recipe-card").removeClass("border-primary");
+
+	if (!recipeId)
+	{
+		return;
+	}
+
+	$("#recipe-row-" + recipeId).addClass("selected");
+	$("#RecipeGalleryCard-" + recipeId).addClass("border-primary");
+}
+
+function ApplyServerSideRecipesFilters(resetPage = true)
+{
+	var searchValue = ($('#search').val() || '').trim();
+	var statusValue = ($('#status-filter').val() || 'all');
+	if (statusValue === 'all')
+	{
+		statusValue = '';
+	}
+
+	var currentSearchValue = GetUriParam('search');
+	if (typeof currentSearchValue === 'undefined')
+	{
+		currentSearchValue = '';
+	}
+
+	var currentStatusValue = GetUriParam('status');
+	if (typeof currentStatusValue === 'undefined')
+	{
+		currentStatusValue = '';
+	}
+
+	if (searchValue === currentSearchValue && statusValue === currentStatusValue)
+	{
+		return;
+	}
+
+	if (searchValue === '')
+	{
+		RemoveUriParam('search');
+	}
+	else
+	{
+		UpdateUriParam('search', searchValue);
+	}
+
+	if (statusValue === '')
+	{
+		RemoveUriParam('status');
+	}
+	else
+	{
+		UpdateUriParam('status', statusValue);
+	}
+
+	if (resetPage)
+	{
+		RemoveUriParam('page');
+	}
+
+	window.location.reload();
+}
+
+function LoadRecipeDetails(recipeId, targetSelector)
+{
+	if (!recipeId)
+	{
+		return;
+	}
+
+	var endpoint = U('/recipes/details/' + recipeId);
+	var target = $(targetSelector);
+	target.html('<div class="text-center p-3"><div class="spinner-border text-primary" role="status"></div></div>');
+
+	$.get(endpoint, function(html)
+	{
+		target.html(html);
+		target.find('[data-toggle="tooltip"]').tooltip();
+	}).fail(function(xhr)
+	{
+		target.html('<div class="alert alert-danger mb-0">' + __t('An error occurred while loading recipe details') + '</div>');
+		console.error(xhr);
+	});
+}
+
+function OpenRecipeDetailsInModal(recipeId)
+{
+	var modalContentId = 'recipe-details-modal-content-' + recipeId + '-' + Date.now();
+	$("body").addClass("fullscreen-card");
+
+	bootbox.dialog({
+		message: '<div id="' + modalContentId + '"></div>',
+		size: 'extra-large',
+		backdrop: true,
+		closeButton: false,
+		buttons: {
+			cancel: {
+				label: __t('Close'),
+				className: 'btn-secondary responsive-button',
+				callback: function()
+				{
+					$(".modal").last().modal("hide");
+					$("body").removeClass("fullscreen-card");
+				}
+			}
+		}
+	});
+
+	LoadRecipeDetails(recipeId, '#' + modalContentId);
+}
 
 if ((typeof GetUriParam("tab") !== "undefined" && GetUriParam("tab") === "gallery") || window.localStorage.getItem("recipes_last_tab_id") == "gallery-tab")
 {
@@ -27,36 +137,33 @@ if ((typeof GetUriParam("tab") !== "undefined" && GetUriParam("tab") === "galler
 var recipe = GetUriParam("recipe");
 if (typeof recipe !== "undefined")
 {
-	$("#recipes-table tr").removeClass("selected");
-	var rowId = "#recipe-row-" + recipe;
-	$(rowId).addClass("selected")
-
-	var cardId = "#RecipeGalleryCard-" + recipe;
-	$(cardId).addClass("border-primary");
+	HighlightSelectedRecipe(recipe);
 
 	if ($(window).width() < 768)
 	{
 		// Scroll to recipe card on mobile
-		$("#selectedRecipeCard")[0].scrollIntoView();
+		var detailsContainer = $("#selectedRecipeDetailsContainer");
+		if (detailsContainer.length)
+		{
+			detailsContainer[0].scrollIntoView();
+		}
 	}
+}
+
+var selectedRecipeFromContainer = $("#selectedRecipeDetailsContainer").data("selected-recipe-id");
+if (BoolVal(Grocy.UserSettings.recipes_show_list_side_by_side) && selectedRecipeFromContainer)
+{
+	LoadRecipeDetails(selectedRecipeFromContainer, '#selectedRecipeDetailsContainer');
 }
 
 if (GetUriParam("search") !== undefined)
 {
 	$("#search").val(GetUriParam("search"));
-	setTimeout(function()
-	{
-		$("#search").keyup();
-	}, 50);
 }
 
 if (GetUriParam("status") !== undefined)
 {
 	$("#status-filter").val(GetUriParam("status"));
-	setTimeout(function()
-	{
-		$("#status-filter").trigger("change");
-	}, 50);
 }
 
 $("a[data-toggle='tab']").on("shown.bs.tab", function(e)
@@ -65,68 +172,31 @@ $("a[data-toggle='tab']").on("shown.bs.tab", function(e)
 	window.localStorage.setItem("recipes_last_tab_id", tabId);
 });
 
-$("#search").on("keyup", Delay(function()
+$("#search").on("keydown", function(event)
 {
-	var value = $(this).val();
-
-	recipesTables.search(value).draw();
-
-	if (!value)
+	if (event.key === 'Enter')
 	{
-		RemoveUriParam("search");
+		event.preventDefault();
+		ApplyServerSideRecipesFilters(true);
 	}
-	else
-	{
-		UpdateUriParam("search", value);
-	}
+});
 
-	$(".recipe-gallery-item").removeClass("d-none");
-	$(".recipe-gallery-item .card-title-search:not(:contains_case_insensitive(" + value + "))").parent().parent().parent().addClass("d-none");
-}, Grocy.FormFocusDelay));
+// Apply search when leaving the field as a fallback for users who don't press Enter.
+$("#search").on("change", function()
+{
+	ApplyServerSideRecipesFilters(true);
+});
 
 $("#clear-filter-button").on("click", function()
 {
 	$("#search").val("");
 	$("#status-filter").val("all");
-	$("#search").trigger("keyup");
-	$("#status-filter").trigger("change");
+	ApplyServerSideRecipesFilters(true);
 });
 
 $("#status-filter").on("change", function()
 {
-	var value = $(this).val();
-	if (value === "all")
-	{
-		value = "";
-	}
-
-	recipesTables.column(recipesTables.colReorder.transpose(6)).search(value).draw();
-
-	$('.recipe-gallery-item').removeClass('d-none');
-	if (value !== "")
-	{
-		if (value === 'Xenoughinstock')
-		{
-			$('.recipe-gallery-item').not('.recipe-enoughinstock').addClass('d-none');
-		}
-		else if (value === 'enoughinstockwithshoppinglist')
-		{
-			$('.recipe-gallery-item').not('.recipe-enoughinstockwithshoppinglist').addClass('d-none');
-		}
-		if (value === 'notenoughinstock')
-		{
-			$('.recipe-gallery-item').not('.recipe-notenoughinstock').addClass('d-none');
-		}
-	}
-
-	if (!value)
-	{
-		RemoveUriParam("status");
-	}
-	else
-	{
-		UpdateUriParam("status", value);
-	}
+	ApplyServerSideRecipesFilters(true);
 });
 
 $(".recipe-delete").on('click', function(e)
@@ -232,7 +302,7 @@ $(document).on('click', '.recipe-shopping-list', function(e)
 	});
 });
 
-$(".recipe-consume").on('click', function(e)
+$(document).on('click', '.recipe-consume', function(e)
 {
 	var objectName = $(e.currentTarget).attr('data-recipe-name');
 	var objectId = $(e.currentTarget).attr('data-recipe-id');
@@ -279,36 +349,21 @@ recipesTables.on('select', function(e, dt, type, indexes)
 	if (type === 'row')
 	{
 		var selectedRecipeId = $(recipesTables.row(indexes[0]).node()).data("recipe-id");
-		var currentRecipeId = location.search.split('recipe=')[1];
+		var currentRecipeId = GetUriParam("recipe");
 
 		if (BoolVal(Grocy.UserSettings.recipes_show_list_side_by_side))
 		{
 			if (selectedRecipeId.toString() !== currentRecipeId)
 			{
 				UpdateUriParam("recipe", selectedRecipeId.toString());
-				window.location.reload();
 			}
+
+			HighlightSelectedRecipe(selectedRecipeId);
+			LoadRecipeDetails(selectedRecipeId, '#selectedRecipeDetailsContainer');
 		}
 		else
 		{
-			$("body").addClass("fullscreen-card");
-
-			bootbox.dialog({
-				message: '<iframe class="embed-responsive" src="' + U("/recipes?embedded&recipe=") + selectedRecipeId + '#fullscreen"></iframe>',
-				size: 'extra-large',
-				backdrop: true,
-				closeButton: false,
-				buttons: {
-					cancel: {
-						label: __t('Close'),
-						className: 'btn-secondary responsive-button',
-						callback: function()
-						{
-							$(".modal").last().modal("hide");
-						}
-					}
-				}
-			});
+			OpenRecipeDetailsInModal(selectedRecipeId);
 		}
 	}
 });
@@ -321,28 +376,13 @@ $(".recipe-gallery-item").on("click", function(e)
 
 	if (BoolVal(Grocy.UserSettings.recipes_show_list_side_by_side))
 	{
-		window.location.href = U('/recipes?tab=gallery&recipe=' + selectedRecipeId);
+		UpdateUriParam("recipe", selectedRecipeId.toString());
+		HighlightSelectedRecipe(selectedRecipeId);
+		LoadRecipeDetails(selectedRecipeId, '#selectedRecipeDetailsContainer');
 	}
 	else
 	{
-		$("body").addClass("fullscreen-card");
-
-		bootbox.dialog({
-			message: '<iframe class="embed-responsive" src="' + U("/recipes?embedded&recipe=") + selectedRecipeId + '#fullscreen"></iframe>',
-			size: 'extra-large',
-			backdrop: true,
-			closeButton: false,
-			buttons: {
-				cancel: {
-					label: __t('Close'),
-					className: 'btn-secondary responsive-button',
-					callback: function()
-					{
-						$(".modal").last().modal("hide");
-					}
-				}
-			}
-		});
+		OpenRecipeDetailsInModal(selectedRecipeId);
 	}
 });
 
@@ -351,7 +391,7 @@ $(".recipe-edit-button").on("click", function(e)
 	e.stopPropagation();
 });
 
-$(".recipe-fullscreen").on('click', function(e)
+$(document).on('click', '.recipe-fullscreen', function(e)
 {
 	e.preventDefault();
 
@@ -374,7 +414,7 @@ $(".recipe-fullscreen").on('click', function(e)
 	}
 });
 
-$(".recipe-print").on('click', function(e)
+$(document).on('click', '.recipe-print', function(e)
 {
 	e.preventDefault();
 
@@ -387,7 +427,7 @@ $(".recipe-print").on('click', function(e)
 	window.print();
 });
 
-$('#servings-scale').keyup(function(event)
+$(document).on('keyup', '#servings-scale', function(event)
 {
 	var data = {};
 	data.desired_servings = $(this).val();

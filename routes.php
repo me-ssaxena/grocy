@@ -77,6 +77,7 @@ $app->group('', function (RouteCollectorProxy $group)
 
 	// Recipe routes
 	$group->get('/recipes', '\Grocy\Controllers\RecipesController:Overview');
+	$group->get('/recipes/details/{recipeId}', '\Grocy\Controllers\RecipesController:RecipeDetails');
 	$group->get('/recipe/{recipeId}', '\Grocy\Controllers\RecipesController:RecipeEditForm');
 	$group->get('/recipe/{recipeId}/pos/{recipePosId}', '\Grocy\Controllers\RecipesController:RecipePosEditForm');
 	$group->get('/recipessettings', '\Grocy\Controllers\RecipesController:RecipesSettings');

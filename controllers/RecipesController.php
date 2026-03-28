@@ -11,6 +11,9 @@ class RecipesController extends BaseController
 {
 	use GrocycodeTrait;
 
+	private const RECIPES_PAGE_SIZE_DEFAULT = 50;
+	private const RECIPES_PAGE_SIZE_MAX = 200;
+
 	public function MealPlan(Request $request, Response $response, array $args)
 	{
 		$start = date('Y-m-d');
@@ -80,80 +83,190 @@ class RecipesController extends BaseController
 
 	public function Overview(Request $request, Response $response, array $args)
 	{
-		$recipes = $this->getDatabase()->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE');
-		$recipesResolved = $this->getRecipesService()->GetRecipesResolved('recipe_id > 0');
+		$queryParams = $request->getQueryParams();
+		$search = trim($queryParams['search'] ?? '');
+		$status = trim($queryParams['status'] ?? '');
 
-		$selectedRecipe = null;
-		if (isset($request->getQueryParams()['recipe']))
+		$page = intval($queryParams['page'] ?? 1);
+		if ($page < 1)
 		{
-			$selectedRecipe = $this->getDatabase()->recipes($request->getQueryParams()['recipe']);
-		}
-		else
-		{
-			foreach ($recipes as $recipe)
-			{
-				$selectedRecipe = $recipe;
-				break;
-			}
+			$page = 1;
 		}
 
-		$totalCosts = null;
-		$totalCalories = null;
-		if ($selectedRecipe)
+		$pageSize = intval($queryParams['page_size'] ?? self::RECIPES_PAGE_SIZE_DEFAULT);
+		if ($pageSize < 1)
 		{
-			$totalCosts = FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $selectedRecipe->id)->costs;
-			$totalCalories = FindObjectInArrayByPropertyValue($recipesResolved, 'recipe_id', $selectedRecipe->id)->calories;
+			$pageSize = self::RECIPES_PAGE_SIZE_DEFAULT;
+		}
+		if ($pageSize > self::RECIPES_PAGE_SIZE_MAX)
+		{
+			$pageSize = self::RECIPES_PAGE_SIZE_MAX;
+		}
+
+		$recipesCountQuery = $this->getDatabase()->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL);
+		$this->ApplyOverviewSearchAndStatusFilters($recipesCountQuery, $search, $status);
+		$totalRecipes = intval($recipesCountQuery->count('*'));
+		$totalPages = max(intval(ceil($totalRecipes / $pageSize)), 1);
+		if ($page > $totalPages)
+		{
+			$page = $totalPages;
+		}
+
+		$offset = ($page - 1) * $pageSize;
+		$recipesQuery = $this->getDatabase()->recipes()
+			->where('type', RecipesService::RECIPE_TYPE_NORMAL)
+			->orderBy('name', 'COLLATE NOCASE');
+		$this->ApplyOverviewSearchAndStatusFilters($recipesQuery, $search, $status);
+		$recipes = $recipesQuery->limit($pageSize, $offset)->fetchAll();
+
+		$recipeIds = [];
+		foreach ($recipes as $recipe)
+		{
+			$recipeIds[] = intval($recipe->id);
+		}
+
+		$recipesResolved = [];
+		if (count($recipeIds) > 0)
+		{
+			$recipesResolved = $this->getRecipesService()->GetRecipesResolved('recipe_id IN (' . implode(',', $recipeIds) . ')')->fetchAll();
 		}
 
 		$viewData = [
 			'recipes' => $recipes,
+			'recipesForPicker' => $this->getDatabase()->recipes()->where('type', RecipesService::RECIPE_TYPE_NORMAL)->orderBy('name', 'COLLATE NOCASE')->fetchAll(),
 			'recipesResolved' => $recipesResolved,
-			'recipePositionsResolved' => $this->getDatabase()->recipes_pos_resolved()->where('recipe_id', $selectedRecipe->id),
-			'selectedRecipe' => $selectedRecipe,
-			'products' => $this->getDatabase()->products(),
-			'quantityUnits' => $this->getDatabase()->quantity_units(),
 			'userfields' => $this->getUserfieldsService()->GetFields('recipes'),
 			'userfieldValues' => $this->getUserfieldsService()->GetAllValues('recipes'),
-			'quantityUnitConversionsResolved' => $this->getDatabase()->cache__quantity_unit_conversions_resolved(),
-			'selectedRecipeTotalCosts' => $totalCosts,
-			'selectedRecipeTotalCalories' => $totalCalories,
-			'mealplanSections' => $this->getDatabase()->meal_plan_sections()->orderBy('sort_number')
+			'mealplanSections' => $this->getDatabase()->meal_plan_sections()->orderBy('sort_number'),
+			'pagination' => [
+				'page' => $page,
+				'pageSize' => $pageSize,
+				'totalRecipes' => $totalRecipes,
+				'totalPages' => $totalPages,
+				'hasPreviousPage' => $page > 1,
+				'hasNextPage' => $page < $totalPages,
+				'previousPage' => max($page - 1, 1),
+				'nextPage' => min($page + 1, $totalPages)
+			],
+			'selectedRecipeId' => isset($queryParams['recipe']) ? intval($queryParams['recipe']) : null,
+			'queryParams' => $queryParams
 		];
 
-		if ($selectedRecipe)
+		return $this->renderPage($response, 'recipes', $viewData);
+	}
+
+	public function RecipeDetails(Request $request, Response $response, array $args)
+	{
+		$recipeId = intval($args['recipeId']);
+		$dbChangedTime = $this->getDatabaseService()->GetDbChangedTime();
+		$currentUserId = defined('GROCY_USER_ID') ? GROCY_USER_ID : 0;
+		$etag = '"' . md5('recipe_details_' . $recipeId . '_' . $currentUserId . '_' . $dbChangedTime) . '"';
+		$lastModifiedTimestamp = strtotime($dbChangedTime);
+
+		$ifNoneMatch = trim($request->getHeaderLine('If-None-Match'));
+		if ($ifNoneMatch === $etag)
 		{
-			$selectedRecipeSubRecipes = $this->getDatabase()->recipes()->where('id IN (SELECT includes_recipe_id FROM recipes_nestings_resolved WHERE recipe_id = :1 AND includes_recipe_id != :1)', $selectedRecipe->id)->orderBy('name', 'COLLATE NOCASE')->fetchAll();
+			return $response
+				->withStatus(304)
+				->withHeader('Cache-Control', 'private, max-age=60, must-revalidate')
+				->withHeader('ETag', $etag)
+				->withHeader('Vary', 'Cookie')
+				->withHeader('Last-Modified', gmdate('D, d M Y H:i:s', $lastModifiedTimestamp) . ' GMT');
+		}
 
-			$includedRecipeIdsAbsolute = [];
-			$includedRecipeIdsAbsolute[] = $selectedRecipe->id;
-			foreach ($selectedRecipeSubRecipes as $subRecipe)
-			{
-				$includedRecipeIdsAbsolute[] = $subRecipe->id;
-			}
+		$viewData = $this->BuildRecipeDetailsViewData($recipeId);
 
-			// TODO: Why not directly use recipes_pos_resolved for all recipe positions here (parent and child)?
-			// This view already correctly recolves child recipe amounts...
-			$allRecipePositions = [];
-			foreach ($includedRecipeIdsAbsolute as $id)
+		if ($viewData['selectedRecipe'] === null)
+		{
+			return $response->withStatus(404);
+		}
+
+		$response = $this->renderPage($response, 'components.recipe_details_panel', $viewData);
+
+		return $response
+			->withHeader('Cache-Control', 'private, max-age=60, must-revalidate')
+			->withHeader('ETag', $etag)
+			->withHeader('Vary', 'Cookie')
+			->withHeader('Last-Modified', gmdate('D, d M Y H:i:s', $lastModifiedTimestamp) . ' GMT');
+	}
+
+	private function ApplyOverviewSearchAndStatusFilters($recipesQuery, string $search, string $status): void
+	{
+		if (!empty($search))
+		{
+			$searchLike = '%' . $search . '%';
+			$recipesQuery->where('(name LIKE :1 OR id IN (SELECT recipe_id FROM recipes_resolved WHERE product_names_comma_separated LIKE :2))', $searchLike, $searchLike);
+		}
+
+		if ($status === 'Xenoughinstock')
+		{
+			$recipesQuery->where('id IN (SELECT recipe_id FROM recipes_resolved WHERE need_fulfilled = 1)');
+		}
+		elseif ($status === 'enoughinstockwithshoppinglist')
+		{
+			$recipesQuery->where('id IN (SELECT recipe_id FROM recipes_resolved WHERE need_fulfilled = 0 AND need_fulfilled_with_shopping_list = 1)');
+		}
+		elseif ($status === 'notenoughinstock')
+		{
+			$recipesQuery->where('id IN (SELECT recipe_id FROM recipes_resolved WHERE need_fulfilled_with_shopping_list = 0)');
+		}
+	}
+
+	private function BuildRecipeDetailsViewData(int $recipeId): array
+	{
+		$selectedRecipe = $this->getDatabase()->recipes()->where('id = :1 AND type = :2', $recipeId, RecipesService::RECIPE_TYPE_NORMAL)->fetch();
+		if ($selectedRecipe === null)
+		{
+			return [
+				'selectedRecipe' => null
+			];
+		}
+
+		$recipePositionsResolved = $this->getDatabase()->recipes_pos_resolved()->where('recipe_id', $selectedRecipe->id)->fetchAll();
+
+		$selectedRecipeSubRecipes = $this->getDatabase()->recipes()
+			->where('id IN (SELECT includes_recipe_id FROM recipes_nestings_resolved WHERE recipe_id = :1 AND includes_recipe_id != :1)', $selectedRecipe->id)
+			->orderBy('name', 'COLLATE NOCASE')
+			->fetchAll();
+
+		$includedRecipeIdsAbsolute = [];
+		$includedRecipeIdsAbsolute[] = $selectedRecipe->id;
+		foreach ($selectedRecipeSubRecipes as $subRecipe)
+		{
+			$includedRecipeIdsAbsolute[] = $subRecipe->id;
+		}
+
+		$recipesResolved = $this->getRecipesService()->GetRecipesResolved('recipe_id IN (' . implode(',', array_map('intval', $includedRecipeIdsAbsolute)) . ')')->fetchAll();
+
+		$allRecipePositions = [];
+		foreach ($includedRecipeIdsAbsolute as $id)
+		{
+			$allRecipePositions[$id] = $this->getDatabase()->recipes_pos_resolved()->where('recipe_id = :1 AND is_nested_recipe_pos = 0', $id)->orderBy('ingredient_group', 'ASC', 'product_group', 'ASC')->fetchAll();
+			foreach ($allRecipePositions[$id] as $pos)
 			{
-				$allRecipePositions[$id] = $this->getDatabase()->recipes_pos_resolved()->where('recipe_id = :1 AND is_nested_recipe_pos = 0', $id)->orderBy('ingredient_group', 'ASC', 'product_group', 'ASC');
-				foreach ($allRecipePositions[$id] as $pos)
+				if ($id != $selectedRecipe->id)
 				{
-					if ($id != $selectedRecipe->id)
+					$pos2 = $this->getDatabase()->recipes_pos_resolved()->where('recipe_id = :1  AND recipe_pos_id = :2 AND is_nested_recipe_pos = 1', $selectedRecipe->id, $pos->recipe_pos_id)->fetch();
+					if ($pos2 !== null)
 					{
-						$pos2 = $this->getDatabase()->recipes_pos_resolved()->where('recipe_id = :1  AND recipe_pos_id = :2 AND is_nested_recipe_pos = 1', $selectedRecipe->id, $pos->recipe_pos_id)->fetch();
 						$pos->recipe_amount = $pos2->recipe_amount;
 						$pos->missing_amount = $pos2->missing_amount;
 					}
 				}
 			}
-
-			$viewData['selectedRecipeSubRecipes'] = $selectedRecipeSubRecipes;
-			$viewData['includedRecipeIdsAbsolute'] = $includedRecipeIdsAbsolute;
-			$viewData['allRecipePositions'] = $allRecipePositions;
 		}
 
-		return $this->renderPage($response, 'recipes', $viewData);
+		return [
+			'selectedRecipe' => $selectedRecipe,
+			'selectedRecipeSubRecipes' => $selectedRecipeSubRecipes,
+			'includedRecipeIdsAbsolute' => $includedRecipeIdsAbsolute,
+			'allRecipePositions' => $allRecipePositions,
+			'recipesResolved' => $recipesResolved,
+			'recipePositionsResolved' => $recipePositionsResolved,
+			'products' => $this->getDatabase()->products()->fetchAll(),
+			'quantityUnits' => $this->getDatabase()->quantity_units()->fetchAll(),
+			'quantityUnitConversionsResolved' => $this->getDatabase()->cache__quantity_unit_conversions_resolved()->fetchAll()
+		];
 	}
 
 	public function RecipeEditForm(Request $request, Response $response, array $args)

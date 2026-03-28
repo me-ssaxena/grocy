@@ -1,5 +1,10 @@
 <?php
 
+// For PHP built-in server: serve static files directly
+if (php_sapi_name() === 'cli-server' && is_file(__DIR__ . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH))) {
+    return false;
+}
+
 // Definitions for embedded mode
 
 if (file_exists(__DIR__ . '/../embedded.txt'))

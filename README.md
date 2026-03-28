@@ -54,6 +54,13 @@ See the website for more installation guides and troubleshooting help. &rarr; [h
   - Required PHP extensions: `fileinfo`, `pdo_sqlite`, `gd`, `ctype`, `intl`, `zlib`, `mbstring`
 - Recent Firefox, Chrome or Edge
 
+## Local dev
+yarn install
+composer install
+php -S 127.0.0.1:8080 -t public public/index.php
+
+open http://127.0.0.1:8080
+
 ## How to run using Docker
 
 &rarr; https://hub.docker.com/r/linuxserver/grocy

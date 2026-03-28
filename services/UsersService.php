@@ -6,13 +6,13 @@ use LessQL\Result;
 
 class UsersService extends BaseService
 {
-	public function CreateUser(string $username, ?string $firstName, ?string $lastName, string $password, string $pictureFileName = null)
+	public function CreateUser(string $username, ?string $firstName, ?string $lastName, string $password, ?string $pictureFileName = null)
 	{
 		$newUserRow = $this->getDatabase()->users()->createRow([
 			'username' => $username,
 			'first_name' => $firstName,
 			'last_name' => $lastName,
-			'password' => password_hash($password, PASSWORD_DEFAULT),
+			'password' => password_hash($password, PASSWORD_ARGON2ID),
 			'picture_file_name' => $pictureFileName
 		]);
 		$newUserRow = $newUserRow->save();
@@ -37,7 +37,7 @@ class UsersService extends BaseService
 		$row->delete();
 	}
 
-	public function EditUser(int $userId, string $username, string $firstName, string $lastName, ?string $password, string $pictureFileName = null)
+	public function EditUser(int $userId, string $username, string $firstName, string $lastName, ?string $password, ?string $pictureFileName = null)
 	{
 		if (!$this->UserExists($userId))
 		{
@@ -61,7 +61,7 @@ class UsersService extends BaseService
 				'username' => $username,
 				'first_name' => $firstName,
 				'last_name' => $lastName,
-				'password' => password_hash($password, PASSWORD_DEFAULT),
+				'password' => password_hash($password, PASSWORD_ARGON2ID),
 				'picture_file_name' => $pictureFileName
 			]);
 		}

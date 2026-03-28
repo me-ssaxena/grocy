@@ -15,6 +15,20 @@
 $('#recipes-table tbody').removeClass("d-none");
 recipesTables.columns.adjust().draw();
 
+function HighlightSelectedRecipe(recipeId)
+{
+	$("#recipes-table tr").removeClass("selected");
+	$(".recipe-card").removeClass("border-primary");
+
+	if (!recipeId)
+	{
+		return;
+	}
+
+	$("#recipe-row-" + recipeId).addClass("selected");
+	$("#RecipeGalleryCard-" + recipeId).addClass("border-primary");
+}
+
 function ApplyServerSideRecipesFilters(resetPage = true)
 {
 	var searchValue = ($('#search').val() || '').trim();
@@ -123,12 +137,7 @@ if ((typeof GetUriParam("tab") !== "undefined" && GetUriParam("tab") === "galler
 var recipe = GetUriParam("recipe");
 if (typeof recipe !== "undefined")
 {
-	$("#recipes-table tr").removeClass("selected");
-	var rowId = "#recipe-row-" + recipe;
-	$(rowId).addClass("selected")
-
-	var cardId = "#RecipeGalleryCard-" + recipe;
-	$(cardId).addClass("border-primary");
+	HighlightSelectedRecipe(recipe);
 
 	if ($(window).width() < 768)
 	{
@@ -170,6 +179,12 @@ $("#search").on("keydown", function(event)
 		event.preventDefault();
 		ApplyServerSideRecipesFilters(true);
 	}
+});
+
+// Apply search when leaving the field as a fallback for users who don't press Enter.
+$("#search").on("change", function()
+{
+	ApplyServerSideRecipesFilters(true);
 });
 
 $("#clear-filter-button").on("click", function()
@@ -343,6 +358,7 @@ recipesTables.on('select', function(e, dt, type, indexes)
 				UpdateUriParam("recipe", selectedRecipeId.toString());
 			}
 
+			HighlightSelectedRecipe(selectedRecipeId);
 			LoadRecipeDetails(selectedRecipeId, '#selectedRecipeDetailsContainer');
 		}
 		else
@@ -361,6 +377,7 @@ $(".recipe-gallery-item").on("click", function(e)
 	if (BoolVal(Grocy.UserSettings.recipes_show_list_side_by_side))
 	{
 		UpdateUriParam("recipe", selectedRecipeId.toString());
+		HighlightSelectedRecipe(selectedRecipeId);
 		LoadRecipeDetails(selectedRecipeId, '#selectedRecipeDetailsContainer');
 	}
 	else

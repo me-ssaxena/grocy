@@ -1,19 +1,20 @@
 
 
 var stockOverviewTable = $('#stock-overview-table').DataTable({
-	'paginate': true,
-	'order': [[5, 'asc']],
-	'pageLength': 100,
-	'dom': '<"row"<"col-sm-12 col-md-6 offset-md-6"f>><"row"<"col-sm-12"tr>><"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"p>>',
+	'paginate': false,
+	'searching': false,
+	'info': false,
+	'ordering': false,
+	'dom': '<"row"<"col-sm-12"tr>>',
 	'columnDefs': [
 		{ 'orderable': false, 'targets': 0 },
 		{ 'searchable': false, "targets": 0 },
 		{ 'searchable': false, "targets": 0 },
+		{ 'visible': false, 'targets': 2 },
+		{ 'visible': false, 'targets': 4 },
 		{ 'visible': false, 'targets': 6 },
 		{ 'visible': false, 'targets': 7 },
 		{ 'visible': false, 'targets': 8 },
-		{ 'visible': false, 'targets': 2 },
-		{ 'visible': false, 'targets': 4 },
 		{ 'visible': false, 'targets': 9 },
 		{ 'visible': false, 'targets': 10 },
 		{ 'visible': false, 'targets': 11 },
@@ -22,97 +23,89 @@ var stockOverviewTable = $('#stock-overview-table').DataTable({
 		{ 'visible': false, 'targets': 14 },
 		{ 'visible': false, 'targets': 15 },
 		{ 'visible': false, 'targets': 16 },
-		{ 'visible': false, 'targets': 17 },
-		{ 'visible': false, 'targets': 18 },
-		{ 'visible': false, 'targets': 19 },
 		{ "type": "custom-sort", "targets": 3 },
-		{ "type": "html-num-fmt", "targets": 9 },
-		{ "type": "html-num-fmt", "targets": 10 },
-		{ "type": "html", "targets": 5 },
-		{ "type": "html", "targets": 11 },
-		{ "type": "custom-sort", "targets": 12 },
-		{ "type": "html-num-fmt", "targets": 13 },
 		{ "type": "custom-sort", "targets": 4 },
-		{ "type": "custom-sort", "targets": 18 }
+		{ "type": "html", "targets": 5 },
+		{ "type": "html-num-fmt", "targets": 6 },
+		{ "type": "html-num-fmt", "targets": 7 },
+		{ "type": "html", "targets": 8 },
+		{ "type": "custom-sort", "targets": 9 },
+		{ "type": "html-num-fmt", "targets": 10 },
+		{ "type": "custom-sort", "targets": 15 }
 	].concat($.fn.dataTable.defaults.columnDefs)
 });
 
 $('#stock-overview-table tbody').removeClass("d-none");
 stockOverviewTable.columns.adjust().draw();
 
-$("#location-filter").on("change", function()
+var stockOverviewFilterForm = $("#stock-overview-filter-form");
+var stockOverviewPageInput = $("#stock-overview-page");
+
+function UpdateStatusFilterClass()
 {
-	var value = $(this).val();
-	if (value === "all")
+	var selectedOption = $("#status-filter option:selected");
+	var optionClass = selectedOption.attr("class") || "bg-white";
+
+	$("#status-filter").attr("class", optionClass + " custom-control custom-select");
+}
+
+function SubmitStockOverviewFilters(resetPage)
+{
+	if (resetPage)
 	{
-		value = "";
-	}
-	else
-	{
-		value = "xx" + value + "xx";
+		stockOverviewPageInput.val("1");
 	}
 
-	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(6)).search(value).draw();
+	stockOverviewFilterForm.trigger("submit");
+}
+
+$("#location-filter").on("change", function()
+{
+	SubmitStockOverviewFilters(true);
 });
 
 $("#product-group-filter").on("change", function()
 {
-	var value = $(this).val();
-	if (value === "all")
-	{
-		value = "";
-	}
-	else
-	{
-		value = "xx" + value + "xx";
-	}
-
-	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(8)).search(value).draw();
+	SubmitStockOverviewFilters(true);
 });
 
 $("#status-filter").on("change", function()
 {
-	var value = $(this).val();
-	if (value === "all")
-	{
-		value = "";
-	}
+	UpdateStatusFilterClass();
+	SubmitStockOverviewFilters(true);
+	return false;
+});
 
-	// Transfer CSS classes of selected element to dropdown element (for background)
-	$(this).attr("class", $("#" + $(this).attr("id") + " option[value='" + value + "']").attr("class") + " form-control");
-
-	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(7)).search(value).draw();
+$("#stock-overview-page-size").on("change", function()
+{
+	SubmitStockOverviewFilters(true);
 });
 
 $(".status-filter-message").on("click", function()
 {
 	var value = $(this).data("status-filter");
 	$("#status-filter").val(value);
-	$("#status-filter").trigger("change");
+	UpdateStatusFilterClass();
+	SubmitStockOverviewFilters(true);
 });
 
 $("#clear-filter-button").on("click", function()
 {
-	$("#search").val("");
-	$("#status-filter").val("all");
-	$("#product-group-filter").val("all");
-	$("#location-filter").val("all");
-	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(6)).search("").draw();
-	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(7)).search("").draw();
-	stockOverviewTable.column(stockOverviewTable.colReorder.transpose(8)).search("").draw();
-	stockOverviewTable.search("").draw();
+	var clearUrl = U('/stockoverview');
+	if (stockOverviewFilterForm.find("input[name='embedded']").length > 0)
+	{
+		clearUrl += '?embedded=1';
+	}
+
+	window.location.href = clearUrl;
 });
 
 $("#search").on("keyup", Delay(function()
 {
-	var value = $(this).val();
-	if (value === "all")
-	{
-		value = "";
-	}
-
-	stockOverviewTable.search(value).draw();
+	SubmitStockOverviewFilters(true);
 }, Grocy.FormFocusDelay));
+
+UpdateStatusFilterClass();
 
 $(document).on('click', '.product-grocycode-label-print', function(e)
 {

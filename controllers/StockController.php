@@ -12,6 +12,10 @@ class StockController extends BaseController
 {
 	use GrocycodeTrait;
 
+	private const STOCK_OVERVIEW_PAGE_SIZE_DEFAULT = 100;
+	private const STOCK_OVERVIEW_PAGE_SIZE_MAX = 200;
+	private const STOCK_OVERVIEW_SORT_DEFAULT = 'next_due_date';
+
 	public function __construct(Container $container)
 	{
 		parent::__construct($container);
@@ -139,6 +143,32 @@ class StockController extends BaseController
 		$usersService = $this->getUsersService();
 		$userSettings = $usersService->GetUserSettings(GROCY_USER_ID);
 		$nextXDays = $userSettings['stock_due_soon_days'];
+		$queryParams = $request->getQueryParams();
+
+		$filters = [
+			'search' => trim($queryParams['search'] ?? ''),
+			'location' => $this->NormalizeStockOverviewFilterValue($queryParams['location'] ?? ''),
+			'product_group' => $this->NormalizeStockOverviewFilterValue($queryParams['product_group'] ?? ''),
+			'status' => $this->NormalizeStockOverviewFilterValue($queryParams['status'] ?? '')
+		];
+		$sort = $this->NormalizeStockOverviewSortColumn($queryParams['sort'] ?? self::STOCK_OVERVIEW_SORT_DEFAULT);
+		$sortDirection = $this->NormalizeStockOverviewSortDirection($queryParams['direction'] ?? 'asc');
+
+		$page = intval($queryParams['page'] ?? 1);
+		if ($page < 1)
+		{
+			$page = 1;
+		}
+
+		$pageSize = intval($queryParams['page_size'] ?? self::STOCK_OVERVIEW_PAGE_SIZE_DEFAULT);
+		if ($pageSize < 1)
+		{
+			$pageSize = self::STOCK_OVERVIEW_PAGE_SIZE_DEFAULT;
+		}
+		if ($pageSize > self::STOCK_OVERVIEW_PAGE_SIZE_MAX)
+		{
+			$pageSize = self::STOCK_OVERVIEW_PAGE_SIZE_MAX;
+		}
 
 		$where = 'is_in_stock_or_below_min_stock = 1';
 		if (boolval($userSettings['stock_overview_show_all_out_of_stock_products']))
@@ -146,15 +176,273 @@ class StockController extends BaseController
 			$where = '1=1';
 		}
 
+		$currentStockCountQuery = $this->BuildStockOverviewQuery($where, $filters, $nextXDays);
+		$totalProducts = intval($currentStockCountQuery->count('*'));
+		$totalPages = max(intval(ceil($totalProducts / $pageSize)), 1);
+		if ($page > $totalPages)
+		{
+			$page = $totalPages;
+		}
+
+		$offset = ($page - 1) * $pageSize;
+		$currentStockQuery = $this->BuildStockOverviewQuery($where, $filters, $nextXDays);
+		$currentStock = $this->ApplyStockOverviewSorting($currentStockQuery, $sort, $sortDirection)
+			->limit($pageSize, $offset)
+			->fetchAll();
+
+		$productIds = [];
+		foreach ($currentStock as $currentStockEntry)
+		{
+			$productIds[] = intval($currentStockEntry->product_id);
+		}
+
+		$userfieldValues = [];
+		if (count($productIds) > 0)
+		{
+			$userfieldValues = $this->getDatabase()->userfield_values_resolved()
+				->where('entity = :1 AND object_id IN (' . implode(',', $productIds) . ')', 'products')
+				->orderBy('name', 'COLLATE NOCASE')
+				->fetchAll();
+		}
+
+		$firstItem = 0;
+		$lastItem = 0;
+		if ($totalProducts > 0)
+		{
+			$firstItem = $offset + 1;
+			$lastItem = min($offset + count($currentStock), $totalProducts);
+		}
+
 		return $this->renderPage($response, 'stockoverview', [
-			'currentStock' => $this->getDatabase()->uihelper_stock_current_overview()->where($where),
+			'currentStock' => $currentStock,
 			'locations' => $this->getDatabase()->locations()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
-			'currentStockLocations' => $this->getStockService()->GetCurrentStockLocations(),
 			'nextXDays' => $nextXDays,
 			'productGroups' => $this->getDatabase()->product_groups()->where('active = 1')->orderBy('name', 'COLLATE NOCASE'),
 			'userfields' => $this->getUserfieldsService()->GetFields('products'),
-			'userfieldValues' => $this->getUserfieldsService()->GetAllValues('products')
+			'userfieldValues' => $userfieldValues,
+			'filters' => $filters,
+			'sorting' => [
+				'sort' => $sort,
+				'direction' => $sortDirection
+			],
+			'pagination' => [
+				'page' => $page,
+				'pageSize' => $pageSize,
+				'totalProducts' => $totalProducts,
+				'totalPages' => $totalPages,
+				'hasPreviousPage' => $page > 1,
+				'hasNextPage' => $page < $totalPages,
+				'previousPage' => max($page - 1, 1),
+				'nextPage' => min($page + 1, $totalPages),
+				'firstItem' => $firstItem,
+				'lastItem' => $lastItem
+			],
+			'queryParams' => $queryParams
 		]);
+	}
+
+	private function BuildStockOverviewQuery(string $baseWhere, array $filters, int $nextXDays)
+	{
+		$query = $this->getDatabase()->uihelper_stock_current_overview()->where($baseWhere);
+
+		if (!empty($filters['search']))
+		{
+			$searchTerm = '%' . $filters['search'] . '%';
+			$query = $query->where(
+				'product_name LIKE :1 OR IFNULL(product_barcodes, \'\') LIKE :2 OR IFNULL(product_group_name, \'\') LIKE :3 OR IFNULL(product_description, \'\') LIKE :4 OR IFNULL(parent_product_name, \'\') LIKE :5 OR IFNULL(product_default_location_name, \'\') LIKE :6 OR IFNULL(default_store_name, \'\') LIKE :7',
+				$searchTerm,
+				$searchTerm,
+				$searchTerm,
+				$searchTerm,
+				$searchTerm,
+				$searchTerm,
+				$searchTerm
+			);
+		}
+
+		if (!empty($filters['location']))
+		{
+			$matchingProductIds = $this->GetStockOverviewProductIdsForLocation($filters['location']);
+			if (count($matchingProductIds) === 0)
+			{
+				$query = $query->where('1 = 0');
+			}
+			else
+			{
+				$query = $query->where('product_id IN (' . implode(',', $matchingProductIds) . ')');
+			}
+		}
+
+		if (!empty($filters['product_group']))
+		{
+			$query = $query->where('product_group_name = :1', $filters['product_group']);
+		}
+
+		return $this->ApplyStockOverviewStatusFilter($query, $filters['status'], $nextXDays);
+	}
+
+	private function ApplyStockOverviewStatusFilter($query, string $status, int $nextXDays)
+	{
+		if ($status === 'expired')
+		{
+			return $query->where('best_before_date <= :1 AND amount > 0 AND due_type = 2', date('Y-m-d', strtotime('-1 days')));
+		}
+
+		if ($status === 'overdue')
+		{
+			return $query->where('best_before_date <= :1 AND amount > 0 AND due_type = 1', date('Y-m-d', strtotime('-1 days')));
+		}
+
+		if ($status === 'duesoon')
+		{
+			return $query->where('best_before_date >= :1 AND best_before_date <= :2 AND amount > 0', date('Y-m-d'), date('Y-m-d', strtotime('+' . $nextXDays . ' days')));
+		}
+
+		if ($status === 'instockX')
+		{
+			return $query->where('amount_aggregated > 0');
+		}
+
+		if ($status === 'belowminstockamount')
+		{
+			return $query->where('product_missing = 1');
+		}
+
+		return $query;
+	}
+
+	private function GetStockOverviewProductIdsForLocation(string $locationName): array
+	{
+		$location = $this->getDatabase()->locations()->where('active = 1 AND name = :1', $locationName)->fetch();
+		if ($location === null)
+		{
+			return [];
+		}
+
+		$productIds = [];
+		foreach ($this->getStockService()->GetCurrentStockLocations() as $currentStockLocation)
+		{
+			if (intval($currentStockLocation->location_id) !== intval($location->id))
+			{
+				continue;
+			}
+
+			$productIds[intval($currentStockLocation->product_id)] = intval($currentStockLocation->product_id);
+		}
+
+		return array_values($productIds);
+	}
+
+	private function ApplyStockOverviewSorting($query, string $sort, string $sortDirection)
+	{
+		$sortDirectionSql = strtoupper($sortDirection);
+
+		switch ($sort)
+		{
+			case 'product':
+				$query = $query->orderBy('product_name', 'COLLATE NOCASE ' . $sortDirectionSql);
+				break;
+			case 'product_group':
+				$query = $query->orderBy('product_group_name', 'COLLATE NOCASE ' . $sortDirectionSql);
+				break;
+			case 'amount':
+				$query = $query->orderBy('amount', $sortDirectionSql);
+				break;
+			case 'value':
+				$query = $query->orderBy('value', $sortDirectionSql);
+				break;
+			case 'calories_per_unit':
+				$query = $query->orderBy('product_calories', $sortDirectionSql);
+				break;
+			case 'calories':
+				$query = $query->orderBy('calories', $sortDirectionSql);
+				break;
+			case 'last_purchased':
+				$query = $query->orderBy('last_purchased', $sortDirectionSql);
+				break;
+			case 'last_price':
+				$query = $query->orderBy('last_price', $sortDirectionSql);
+				break;
+			case 'min_stock_amount':
+				$query = $query->orderBy('min_stock_amount', $sortDirectionSql);
+				break;
+			case 'product_description':
+				$query = $query->orderBy('product_description', 'COLLATE NOCASE ' . $sortDirectionSql);
+				break;
+			case 'parent_product':
+				$query = $query->orderBy('parent_product_name', 'COLLATE NOCASE ' . $sortDirectionSql);
+				break;
+			case 'default_location':
+				$query = $query->orderBy('product_default_location_name', 'COLLATE NOCASE ' . $sortDirectionSql);
+				break;
+			case 'average_price':
+				$query = $query->orderBy('average_price', $sortDirectionSql);
+				break;
+			case 'default_store':
+				$query = $query->orderBy('default_store_name', 'COLLATE NOCASE ' . $sortDirectionSql);
+				break;
+			case 'next_due_date':
+			default:
+				$query = $query->orderBy('best_before_date', $sortDirectionSql);
+				break;
+		}
+
+		if ($sort !== 'product')
+		{
+			$query = $query->orderBy('product_name', 'COLLATE NOCASE ASC');
+		}
+
+		return $query;
+	}
+
+	private function NormalizeStockOverviewFilterValue(string $value): string
+	{
+		$value = trim($value);
+		if ($value === 'all')
+		{
+			return '';
+		}
+
+		return $value;
+	}
+
+	private function NormalizeStockOverviewSortColumn(string $value): string
+	{
+		$allowedSortColumns = [
+			'product',
+			'product_group',
+			'amount',
+			'value',
+			'next_due_date',
+			'calories_per_unit',
+			'calories',
+			'last_purchased',
+			'last_price',
+			'min_stock_amount',
+			'product_description',
+			'parent_product',
+			'default_location',
+			'average_price',
+			'default_store'
+		];
+
+		if (!in_array($value, $allowedSortColumns))
+		{
+			return self::STOCK_OVERVIEW_SORT_DEFAULT;
+		}
+
+		return $value;
+	}
+
+	private function NormalizeStockOverviewSortDirection(string $value): string
+	{
+		$value = strtolower(trim($value));
+		if ($value !== 'desc')
+		{
+			return 'asc';
+		}
+
+		return 'desc';
 	}
 
 	public function ProductBarcodesEditForm(Request $request, Response $response, array $args)

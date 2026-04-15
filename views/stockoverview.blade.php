@@ -91,70 +91,150 @@
 </div>
 <div class="row collapse d-md-flex"
 	id="table-filter-row">
-	<div class="col-12 col-md-6 col-xl-3">
+	<form id="stock-overview-filter-form"
+		class="col-12 row"
+		method="get"
+		action="{{ $U('/stockoverview') }}">
+		<input type="hidden"
+			name="sort"
+			value="{{ $sorting['sort'] }}">
+		<input type="hidden"
+			name="direction"
+			value="{{ $sorting['direction'] }}">
+		<input type="hidden"
+			id="stock-overview-page"
+			name="page"
+			value="{{ $pagination['page'] }}">
+		@if($embedded)
+		<input type="hidden"
+			name="embedded"
+			value="1">
+		@endif
+	<div class="col-12 col-md-6 col-xl-4">
 		<div class="input-group">
 			<div class="input-group-prepend">
 				<span class="input-group-text"><i class="fa-solid fa-search"></i></span>
 			</div>
 			<input type="text"
+				name="search"
 				id="search"
 				class="form-control"
+				value="{{ $filters['search'] }}"
 				placeholder="{{ $__t('Search') }}">
 		</div>
 	</div>
 	@if(GROCY_FEATURE_FLAG_STOCK_LOCATION_TRACKING)
-	<div class="col-12 col-md-6 col-xl-3">
+	<div class="col-12 col-md-6 col-xl-2">
 		<div class="input-group">
 			<div class="input-group-prepend">
 				<span class="input-group-text"><i class="fa-solid fa-filter"></i>&nbsp;{{ $__t('Location') }}</span>
 			</div>
 			<select class="custom-control custom-select"
+				name="location"
 				id="location-filter">
 				<option value="all">{{ $__t('All') }}</option>
 				@foreach($locations as $location)
-				<option value="{{ $location->name }}">{{ $location->name }}</option>
+				<option value="{{ $location->name }}"
+					@if($filters['location'] === $location->name) selected @endif>{{ $location->name }}</option>
 				@endforeach
 			</select>
 		</div>
 	</div>
 	@endif
-	<div class="col-12 col-md-6 col-xl-3">
+	<div class="col-12 col-md-6 col-xl-2">
 		<div class="input-group">
 			<div class="input-group-prepend">
 				<span class="input-group-text"><i class="fa-solid fa-filter"></i>&nbsp;{{ $__t('Product group') }}</span>
 			</div>
 			<select class="custom-control custom-select"
+				name="product_group"
 				id="product-group-filter">
 				<option value="all">{{ $__t('All') }}</option>
 				@foreach($productGroups as $productGroup)
-				<option value="{{ $productGroup->name }}">{{ $productGroup->name }}</option>
+				<option value="{{ $productGroup->name }}"
+					@if($filters['product_group'] === $productGroup->name) selected @endif>{{ $productGroup->name }}</option>
 				@endforeach
 			</select>
 		</div>
 	</div>
-	<div class="col-12 col-md-6 col-xl-3">
+	<div class="col-12 col-md-6 col-xl-2">
 		<div class="input-group">
 			<div class="input-group-prepend">
 				<span class="input-group-text"><i class="fa-solid fa-filter"></i>&nbsp;{{ $__t('Status') }}</span>
 			</div>
 			<select class="custom-control custom-select"
+				name="status"
 				id="status-filter">
 				<option class="bg-white"
-					value="all">{{ $__t('All') }}</option>
+					value="all"
+					@if($filters['status'] === '' || $filters['status'] === 'all') selected @endif>{{ $__t('All') }}</option>
 				@if (GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING)
-				<option value="duesoon">{{ $__t('Due soon') }}</option>
-				<option value="overdue">{{ $__t('Overdue') }}</option>
-				<option value="expired">{{ $__t('Expired') }}</option>
+				<option value="duesoon"
+					@if($filters['status'] === 'duesoon') selected @endif>{{ $__t('Due soon') }}</option>
+				<option value="overdue"
+					@if($filters['status'] === 'overdue') selected @endif>{{ $__t('Overdue') }}</option>
+				<option value="expired"
+					@if($filters['status'] === 'expired') selected @endif>{{ $__t('Expired') }}</option>
 				@endif
-				<option value="belowminstockamount">{{ $__t('Below min. stock amount') }}</option>
-				<option value="instockX">{{ $__t('In stock products') }}</option>
+				<option value="belowminstockamount"
+					@if($filters['status'] === 'belowminstockamount') selected @endif>{{ $__t('Below min. stock amount') }}</option>
+				<option value="instockX"
+					@if($filters['status'] === 'instockX') selected @endif>{{ $__t('In stock products') }}</option>
 			</select>
 		</div>
 	</div>
+	<div class="col-12 col-md-6 col-xl-2 mt-2 mt-md-0">
+		<div class="input-group">
+			<div class="input-group-prepend">
+				<span class="input-group-text"><i class="fa-solid fa-list"></i>&nbsp;{{ $__t('Per page') }}</span>
+			</div>
+			<select class="custom-control custom-select"
+				name="page_size"
+				id="stock-overview-page-size">
+				<option value="50"
+					@if($pagination['pageSize'] === 50) selected @endif>50</option>
+				<option value="100"
+					@if($pagination['pageSize'] === 100) selected @endif>100</option>
+				<option value="200"
+					@if($pagination['pageSize'] === 200) selected @endif>200</option>
+			</select>
+		</div>
+	</div>
+	</form>
 </div>
 
 <div class="row">
 	<div class="col">
+		@php
+		$stockOverviewSortUrl = function (string $column) use ($queryParams, $sorting, $U)
+		{
+			$sortQueryParams = $queryParams;
+			$sortQueryParams['sort'] = $column;
+			$sortQueryParams['direction'] = ($sorting['sort'] === $column && $sorting['direction'] === 'asc') ? 'desc' : 'asc';
+			$sortQueryParams['page'] = 1;
+
+			return $U('/stockoverview?' . http_build_query($sortQueryParams));
+		};
+		$stockOverviewSortIcon = function (string $column) use ($sorting)
+		{
+			if ($sorting['sort'] !== $column)
+			{
+				return '<i class="fa-solid fa-sort text-muted small"></i>';
+			}
+
+			if ($sorting['direction'] === 'asc')
+			{
+				return '<i class="fa-solid fa-sort-up"></i>';
+			}
+
+			return '<i class="fa-solid fa-sort-down"></i>';
+		};
+		@endphp
+		@if(count($currentStock) === 0)
+		<div class="alert alert-info mb-3">
+			{{ $__t('No products found') }}
+		</div>
+		@endif
 		<table id="stock-overview-table"
 			class="table table-sm table-striped nowrap w-100">
 			<thead>
@@ -165,25 +245,37 @@
 							data-table-selector="#stock-overview-table"
 							href="#"><i class="fa-solid fa-eye"></i></a>
 					</th>
-					<th>{{ $__t('Product') }}</th>
-					<th class="allow-grouping">{{ $__t('Product group') }}</th>
-					<th>{{ $__t('Amount') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Value') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING) d-none @endif allow-grouping">{{ $__t('Next due date') }}</th>
-					<th class="d-none">Hidden location</th>
-					<th class="d-none">Hidden status</th>
-					<th class="d-none">Hidden product group</th>
-					<th>{{ $__t('Calories') }} ({{ $__t('Per stock quantity unit') }})</th>
-					<th>{{ $__t('Calories') }}</th>
-					<th class="allow-grouping">{{ $__t('Last purchased') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Last price') }}</th>
-					<th class="allow-grouping">{{ $__t('Min. stock amount') }}</th>
-					<th>{{ $__t('Product description') }}</th>
-					<th class="allow-grouping">{{ $__t('Parent product') }}</th>
-					<th class="allow-grouping">{{ $__t('Default location') }}</th>
+					<th><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('product') }}">{{ $__t('Product') }} {!! $stockOverviewSortIcon('product') !!}</a></th>
+					<th class="allow-grouping"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('product_group') }}">{{ $__t('Product group') }} {!! $stockOverviewSortIcon('product_group') !!}</a></th>
+					<th><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('amount') }}">{{ $__t('Amount') }} {!! $stockOverviewSortIcon('amount') !!}</a></th>
+					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('value') }}">{{ $__t('Value') }} {!! $stockOverviewSortIcon('value') !!}</a></th>
+					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_BEST_BEFORE_DATE_TRACKING) d-none @endif allow-grouping"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('next_due_date') }}">{{ $__t('Next due date') }} {!! $stockOverviewSortIcon('next_due_date') !!}</a></th>
+					<th><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('calories_per_unit') }}">{{ $__t('Calories') }} ({{ $__t('Per stock quantity unit') }}) {!! $stockOverviewSortIcon('calories_per_unit') !!}</a></th>
+					<th><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('calories') }}">{{ $__t('Calories') }} {!! $stockOverviewSortIcon('calories') !!}</a></th>
+					<th class="allow-grouping"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('last_purchased') }}">{{ $__t('Last purchased') }} {!! $stockOverviewSortIcon('last_purchased') !!}</a></th>
+					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('last_price') }}">{{ $__t('Last price') }} {!! $stockOverviewSortIcon('last_price') !!}</a></th>
+					<th class="allow-grouping"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('min_stock_amount') }}">{{ $__t('Min. stock amount') }} {!! $stockOverviewSortIcon('min_stock_amount') !!}</a></th>
+					<th><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('product_description') }}">{{ $__t('Product description') }} {!! $stockOverviewSortIcon('product_description') !!}</a></th>
+					<th class="allow-grouping"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('parent_product') }}">{{ $__t('Parent product') }} {!! $stockOverviewSortIcon('parent_product') !!}</a></th>
+					<th class="allow-grouping"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('default_location') }}">{{ $__t('Default location') }} {!! $stockOverviewSortIcon('default_location') !!}</a></th>
 					<th>{{ $__t('Product picture') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif">{{ $__t('Average price') }}</th>
-					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping">{{ $__t('Default store') }}</th>
+					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('average_price') }}">{{ $__t('Average price') }} {!! $stockOverviewSortIcon('average_price') !!}</a></th>
+					<th class="@if(!GROCY_FEATURE_FLAG_STOCK_PRICE_TRACKING) d-none @endif allow-grouping"><a class="text-dark text-decoration-none"
+						href="{{ $stockOverviewSortUrl('default_store') }}">{{ $__t('Default store') }} {!! $stockOverviewSortIcon('default_store') !!}</a></th>
 
 					@include('components.userfields_thead', array(
 					'userfields' => $userfields
@@ -375,34 +467,6 @@
 							class="timeago timeago-contextual"
 							@if(!empty($currentStockEntry->best_before_date)) datetime="{{ $currentStockEntry->best_before_date }} 23:59:59" @endif></time>
 					</td>
-					<td class="d-none">
-						@foreach(FindAllObjectsInArrayByPropertyValue($currentStockLocations, 'product_id', $currentStockEntry->product_id) as $locationsForProduct)
-						xx{{ FindObjectInArrayByPropertyValue($locations, 'id', $locationsForProduct->location_id)->name }}xx
-						@endforeach
-					</td>
-					<td class="d-none">
-						@if($currentStockEntry->best_before_date < date('Y-m-d
-							23:59:59',
-							strtotime('-'
-							. '1'
-							. ' days'
-							))
-							&&
-							$currentStockEntry->amount > 0) @if($currentStockEntry->due_type == 1) overdue @else expired @endif @elseif($currentStockEntry->best_before_date < date('Y-m-d
-								23:59:59',
-								strtotime('+'
-								.
-								$nextXDays
-								. ' days'
-								))
-								&&
-								$currentStockEntry->amount > 0) duesoon @endif
-								@if($currentStockEntry->amount_aggregated > 0) instockX @endif
-								@if ($currentStockEntry->product_missing) belowminstockamount @endif
-					</td>
-					<td class="d-none">
-						xx{{ $currentStockEntry->product_group_name }}xx
-					</td>
 					<td>
 						<span class="locale-number locale-number-quantity-amount">{{ $currentStockEntry->product_calories }}</span>
 					</td>
@@ -470,6 +534,43 @@
 		</table>
 	</div>
 </div>
+
+@if($pagination['totalProducts'] > 0)
+@php
+$paginationQueryParams = $queryParams;
+unset($paginationQueryParams['page']);
+unset($paginationQueryParams['page_size']);
+$paginationQueryTail = http_build_query($paginationQueryParams);
+if (!empty($paginationQueryTail))
+{
+	$paginationQueryTail = '&' . $paginationQueryTail;
+}
+@endphp
+<div class="row mt-3">
+	<div class="col d-flex flex-column flex-md-row align-items-md-center justify-content-between">
+		<div class="text-muted small mb-2 mb-md-0">
+			{{ $__t('Showing %1$s to %2$s of %3$s products', $pagination['firstItem'], $pagination['lastItem'], $pagination['totalProducts']) }}
+		</div>
+		@if($pagination['totalPages'] > 1)
+		<nav aria-label="{{ $__t('Stock overview pagination') }}">
+			<ul class="pagination pagination-sm mb-0">
+				<li class="page-item @if(!$pagination['hasPreviousPage']) disabled @endif">
+					<a class="page-link"
+						href="{{ $U('/stockoverview?page=' . $pagination['previousPage'] . '&page_size=' . $pagination['pageSize'] . $paginationQueryTail) }}">{{ $__t('Previous') }}</a>
+				</li>
+				<li class="page-item disabled">
+					<span class="page-link">{{ $__t('Page %1$s of %2$s', $pagination['page'], $pagination['totalPages']) }}</span>
+				</li>
+				<li class="page-item @if(!$pagination['hasNextPage']) disabled @endif">
+					<a class="page-link"
+						href="{{ $U('/stockoverview?page=' . $pagination['nextPage'] . '&page_size=' . $pagination['pageSize'] . $paginationQueryTail) }}">{{ $__t('Next') }}</a>
+				</li>
+			</ul>
+		</nav>
+		@endif
+	</div>
+</div>
+@endif
 
 @include('components.productcard', [
 'asModal' => true

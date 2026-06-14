@@ -110,8 +110,10 @@
 			</div>
 			<select class="custom-control custom-select"
 				id="daterange-filter">
-				<option value="1"
-					selected>{{ $__n(1, '%s month', '%s months') }}</option>
+				<option value="7d"
+					selected>{{ $__t('Last week') }}</option>
+				<option value="15d">{{ $__t('Last 15 days') }}</option>
+				<option value="1">{{ $__n(1, '%s month', '%s months') }}</option>
 				<option value="6">{{ $__n(6, '%s month', '%s months') }}</option>
 				<option value="12">{{ $__n(1, '%s year', '%s years') }}</option>
 				<option value="24">{{ $__n(2, '%s month', '%s years') }}</option>

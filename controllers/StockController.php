@@ -249,7 +249,7 @@ class StockController extends BaseController
 		{
 			$searchTerm = '%' . $filters['search'] . '%';
 			$query = $query->where(
-				'product_name LIKE :1 OR IFNULL(product_barcodes, \'\') LIKE :2 OR IFNULL(product_group_name, \'\') LIKE :3 OR IFNULL(product_description, \'\') LIKE :4 OR IFNULL(parent_product_name, \'\') LIKE :5 OR IFNULL(product_default_location_name, \'\') LIKE :6 OR IFNULL(default_store_name, \'\') LIKE :7',
+				'product_name LIKE ? OR IFNULL(product_barcodes, \'\') LIKE ? OR IFNULL(product_group_name, \'\') LIKE ? OR IFNULL(product_description, \'\') LIKE ? OR IFNULL(parent_product_name, \'\') LIKE ? OR IFNULL(product_default_location_name, \'\') LIKE ? OR IFNULL(default_store_name, \'\') LIKE ?',
 				$searchTerm,
 				$searchTerm,
 				$searchTerm,
@@ -275,7 +275,7 @@ class StockController extends BaseController
 
 		if (!empty($filters['product_group']))
 		{
-			$query = $query->where('product_group_name = :1', $filters['product_group']);
+			$query = $query->where('product_group_name = ?', $filters['product_group']);
 		}
 
 		return $this->ApplyStockOverviewStatusFilter($query, $filters['status'], $nextXDays);
@@ -285,17 +285,17 @@ class StockController extends BaseController
 	{
 		if ($status === 'expired')
 		{
-			return $query->where('best_before_date <= :1 AND amount > 0 AND due_type = 2', date('Y-m-d', strtotime('-1 days')));
+			return $query->where('best_before_date <= ? AND amount > 0 AND due_type = 2', date('Y-m-d', strtotime('-1 days')));
 		}
 
 		if ($status === 'overdue')
 		{
-			return $query->where('best_before_date <= :1 AND amount > 0 AND due_type = 1', date('Y-m-d', strtotime('-1 days')));
+			return $query->where('best_before_date <= ? AND amount > 0 AND due_type = 1', date('Y-m-d', strtotime('-1 days')));
 		}
 
 		if ($status === 'duesoon')
 		{
-			return $query->where('best_before_date >= :1 AND best_before_date <= :2 AND amount > 0', date('Y-m-d'), date('Y-m-d', strtotime('+' . $nextXDays . ' days')));
+			return $query->where('best_before_date >= ? AND best_before_date <= ? AND amount > 0', date('Y-m-d'), date('Y-m-d', strtotime('+' . $nextXDays . ' days')));
 		}
 
 		if ($status === 'instockX')

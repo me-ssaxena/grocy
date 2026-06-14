@@ -1,4 +1,4 @@
-﻿var stockJournalTable = $('#stock-journal-table').DataTable({
+var stockJournalTable = $('#stock-journal-table').DataTable({
 	'order': [[3, 'desc']],
 	'paginate': true,
 	'pageLength': 100,
@@ -85,7 +85,7 @@ $("#clear-filter-button").on("click", function()
 	$("#transaction-type-filter").val("all");
 	$("#location-filter").val("all");
 	$("#user-filter").val("all");
-	$("#daterange-filter").val("1");
+	$("#daterange-filter").val("7d");
 	RemoveUriParam("months");
 
 	if (GetUriParam("embedded") === undefined)

@@ -61,15 +61,24 @@ class StockController extends BaseController
 
 	public function Journal(Request $request, Response $response, array $args)
 	{
-		if (isset($request->getQueryParams()['months']) && filter_var($request->getQueryParams()['months'], FILTER_VALIDATE_INT) !== false)
+		$months = $request->getQueryParams()['months'] ?? null;
+
+		if ($months === '7d')
 		{
-			$months = $request->getQueryParams()['months'];
+			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-7 days')";
+		}
+		elseif ($months === '15d')
+		{
+			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-15 days')";
+		}
+		elseif ($months !== null && filter_var($months, FILTER_VALIDATE_INT) !== false)
+		{
 			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-$months months')";
 		}
 		else
 		{
-			// Default 1 month
-			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-1 months')";
+			// Default to last week (7 days)
+			$where = "row_created_timestamp > DATE(DATE('now', 'localtime'), '-7 days')";
 		}
 
 		if (isset($request->getQueryParams()['product']) && filter_var($request->getQueryParams()['product'], FILTER_VALIDATE_INT) !== false)

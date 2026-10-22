@@ -49,6 +49,7 @@ WORKDIR /var/www/html
 
 # Copy dependency definitions
 COPY package.json yarn.lock .yarnrc ./
+COPY third-party ./third-party
 COPY composer.json composer.lock ./
 
 # Install dependencies

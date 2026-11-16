@@ -5,7 +5,39 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: app
     container_name: grocy-app
     volumes:
       - /container-data/sinali-grocy:/var/www/html/data
     restart: unless-stopped
+
+  # Nightly encrypted backup of Grocy (database and data files) to a Google Drive shared drive (see README › Backups).
+  # The variables are optional so a missing one never blocks deploying the app: until they're set, this container
+  # only logs that backups are off.
+  backup:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: backup
+    restart: unless-stopped
+    environment:
+      # Encrypts the backups. Keep a copy outside this server: without it the backups can't be read.
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      # Service account key JSON, base64-encoded (base64 -w0 key.json) or raw
+      GDRIVE_SERVICE_ACCOUNT: ${GDRIVE_SERVICE_ACCOUNT:-}
+      GDRIVE_SHARED_DRIVE_ID: ${GDRIVE_SHARED_DRIVE_ID:-}
+      GDRIVE_FOLDER_ID: ${GDRIVE_FOLDER_ID:-}
+      BACKUP_REPO_PATH: ${BACKUP_REPO_PATH:-grocy-restic}
+      BACKUP_TIME: ${BACKUP_TIME:-03:30}
+      TZ: ${BACKUP_TZ:-Asia/Kolkata}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+      BACKUP_KEEP_MONTHLY: ${BACKUP_KEEP_MONTHLY:-6}
+      BACKUP_HEALTHCHECK_URL: ${BACKUP_HEALTHCHECK_URL:-}
+    volumes:
+      # Grocy's data directory. Writable so a restore can put files back; backups never modify it.
+      - /container-data/sinali-grocy:/data
+      - backup-cache:/cache
+
+volumes:
+  backup-cache:

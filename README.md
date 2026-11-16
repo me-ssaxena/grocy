@@ -65,6 +65,84 @@ open http://127.0.0.1:8080
 
 &rarr; https://hub.docker.com/r/linuxserver/grocy
 
+## Backups
+
+In production, the `backup` service in `docker-compose.yml` backs up Grocy every night to a folder on a Google Drive
+shared drive (the same setup as sinali-red).
+
+It uses [restic](https://restic.net) over [rclone](https://rclone.org). Backups are **encrypted before they leave the
+server** (Drive only holds unreadable chunks), and each night uploads only what changed. Snapshots have the host `grocy`.
+Every night it backs up, in this order:
+
+1. **Database** (tag `db`): a copy of `grocy.db` made with SQLite's online backup (safe while Grocy is running) and
+   checked with `PRAGMA quick_check`.
+2. **Files** (tag `files`): the rest of the data directory: `config.php`, `storage/` (product and recipe pictures,
+   uploaded files) and `plugins/`. It skips the database files, `viewcache/` and `backups/` (`update.sh`'s archives).
+
+A part that fails doesn't stop the other, but the run is reported as failed. Retention keeps 7 daily, 4 weekly and
+6 monthly snapshots, and every Sunday `restic check` verifies the repository.
+
+### Setup
+
+1. **Google:** the service account needs the **Content manager** role on the backup folder, and the Drive API must be
+   enabled in its Google Cloud project. The service account and folder used for sinali-red work here too.
+2. **Coolify environment variables:**
+
+   | Variable | Value |
+   |----------|-------|
+   | `RESTIC_PASSWORD` | `openssl rand -base64 32`. **Also store it in a password manager.** Without it the backups can't be decrypted, and nobody can recover it. |
+   | `GDRIVE_SERVICE_ACCOUNT` | The service account's JSON key, base64-encoded so it fits on one line: `base64 -w0 key.json` |
+   | `GDRIVE_SHARED_DRIVE_ID` | The ID at the end of the shared drive's URL when you open its top level (`drive.google.com/drive/folders/<id>`) |
+   | `GDRIVE_FOLDER_ID` | The ID at the end of the backup folder's URL |
+   | `BACKUP_REPO_PATH` | Folder name of the repository inside the backup folder, default `grocy-restic` |
+   | `BACKUP_HEALTHCHECK_URL` | Optional but recommended: a [healthchecks.io](https://healthchecks.io) check URL (daily period, a few hours' grace). It's pinged at the start and end of each run and on failure. |
+   | `BACKUP_TIME`, `BACKUP_TZ` | When to run. The default is `03:30` `Asia/Kolkata` (after sinali-red's 03:00) |
+   | `BACKUP_KEEP_DAILY`, `_WEEKLY`, `_MONTHLY` | Retention, default 7, 4, 6 |
+
+   The app deploys without these. Until the first three are set, the backup container logs `backups are OFF` and does nothing.
+3. **Deploy.** The backup container's log should show `repository ok`. The first time, it creates the repository as a
+   `grocy-restic` folder inside the backup folder.
+4. **Run the first backup now:** in Coolify, open the `backup` container's **Terminal** and run `grocy-backup run`.
+5. **Test a restore:** `grocy-backup verify` restores the latest database snapshot to a scratch file, checks it, and
+   prints row counts next to the live ones. Nothing live is touched.
+
+The host cron script `backup_grocy.sh` has been removed, so delete its crontab entry on the server. The old zips in
+`Grocy/rclone` on Drive stay until you delete them.
+
+### Commands (in the `backup` container's terminal)
+
+```sh
+grocy-backup run                           # back up now
+grocy-backup verify                        # test-restore the latest database snapshot
+grocy-backup snapshots                     # list snapshots (any other restic command works the same way)
+grocy-backup ls latest --tag files         # files in the latest files snapshot
+grocy-backup stats --mode raw-data         # space used on Drive
+```
+
+### Restoring
+
+**Database.** Stop the app in Coolify (leave the `backup` container running), then in the `backup` container:
+
+```sh
+grocy-backup snapshots --tag db           # pick one, or use "latest"
+grocy-backup dump --host grocy --tag db latest /tmp/grocy-db/grocy.db > /tmp/restored.db
+sqlite3 /tmp/restored.db 'PRAGMA integrity_check;'   # should print "ok"
+rm -f /data/grocy.db-journal /data/grocy.db-wal /data/grocy.db-shm
+mv /tmp/restored.db /data/grocy.db
+```
+
+Then start the app again (its entrypoint fixes the file's ownership).
+
+**Files.** This can run while everything is up. `--target /` puts files back at `/data/...`. Files already there are
+left alone unless they differ.
+
+```sh
+grocy-backup restore latest --host grocy --tag files --target /
+```
+
+**Without the server:** the backups are an ordinary restic repository. On any machine with restic and rclone configured
+for the same folder, `restic -r rclone:<remote>:grocy-restic snapshots` works with the same password.
+
 ## How to update
 
 - Overwrite everything with the [latest release](https://releases.grocy.info/latest) while keeping the `data` directory

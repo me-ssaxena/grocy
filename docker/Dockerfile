@@ -1,4 +1,12 @@
-FROM php:8.5-apache
+# ---- production: nightly backup of Grocy to Google Drive (restic over rclone), see README › Backups ----
+FROM alpine:3.22 AS backup
+RUN apk add --no-cache bash ca-certificates curl tzdata restic rclone sqlite
+COPY --chmod=755 backup/grocy-backup.sh /usr/local/bin/grocy-backup
+ENV RESTIC_CACHE_DIR=/cache
+CMD ["grocy-backup", "schedule"]
+
+# ---- production: the app (default target) ----
+FROM php:8.5-apache AS app
 
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
@@ -49,6 +57,7 @@ WORKDIR /var/www/html
 
 # Copy dependency definitions
 COPY package.json yarn.lock .yarnrc ./
+COPY third-party ./third-party
 COPY composer.json composer.lock ./
 
 # Install dependencies

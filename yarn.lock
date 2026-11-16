@@ -2,9 +2,8 @@
 # yarn lockfile v1
 
 
-"@danielfarrell/bootstrap-combobox@https://github.com/berrnd/bootstrap-combobox/archive/fcf0110146f4daab94888234c57d198b4ca5f129.tar.gz":
+"@danielfarrell/bootstrap-combobox@file:./third-party/bootstrap-combobox":
   version "1.1.8"
-  resolved "https://github.com/berrnd/bootstrap-combobox/archive/fcf0110146f4daab94888234c57d198b4ca5f129.tar.gz#8ab9cab982f7ca59ff3050e463ad4d3ce469b705"
 
 "@fontsource/roboto@^5.1.1":
   version "5.2.10"
